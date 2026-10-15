@@ -23,7 +23,7 @@ def record(event, **fields):
 
 name = Path(sys.argv[0]).name
 if name == "selection_capture":
-    record("capture_start")
+    record("capture_start", python_prefix=sys.prefix)
     time.sleep(0.25)
     record("capture_end")
     print("Captured selection.", end="")
@@ -50,7 +50,7 @@ elif name == "paragraph_translator.py":
     args.status_file.write_text(json.dumps(dict(mode=os.environ.get("TEST_MODE", "单段落快速翻译")), ensure_ascii=False, separators=(",", ":")))
     print("Test translation", end="")
 else:
-    record("window", mode=sys.argv[1])
+    record("window", mode=sys.argv[1], python_prefix=sys.prefix)
     path = Path(sys.argv[2])
     deadline = time.monotonic() + 4
     while time.monotonic() < deadline and path.exists():
@@ -81,6 +81,7 @@ class QuickActionPipelineTests(unittest.TestCase):
             if key.startswith("TRANSLATOR_"):
                 self.env.pop(key)
         self.env["TRANSLATOR_PYTHON"] = sys.executable
+        self.env["PATH"] = os.pathsep.join((str(Path(sys.executable).parent), self.env.get("PATH", "")))
         self.env["TRANSLATOR_LOG_DIR"] = str(self.root / "logs")
         script = (ROOT / "run_quick_action.sh").read_text()
         script = script.replace('GESTURE_STATE_DIR="${TMPDIR:-/tmp}/com.zhaoxun.paragraph-translator.shortcut-${UID}"', f'GESTURE_STATE_DIR="{self.root / "gesture-state"}"')
@@ -89,7 +90,7 @@ class QuickActionPipelineTests(unittest.TestCase):
         for name in ("paragraph_translator.py", "build/selection_capture", "build/多段落翻译窗口.app/Contents/MacOS/translation_result_window"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(f"#!{sys.executable}\n" + HELPER)
+            path.write_text("#!/usr/bin/env python3\n" + HELPER)
             path.chmod(0o755)
 
     def events(self):
@@ -131,7 +132,13 @@ class QuickActionPipelineTests(unittest.TestCase):
 
     def test_second_press_changes_format_without_duplicate_window_or_request(self):
         first = subprocess.Popen(["/bin/zsh", str(self.root / "run_quick_action.sh")], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=self.env)
-        self.addCleanup(lambda: first.kill() if first.poll() is None else None)
+
+        def cleanup_process():
+            if first.poll() is None:
+                first.kill()
+            first.communicate(timeout=5)
+
+        self.addCleanup(cleanup_process)
         self.wait_for("window")
         second = self.run_action()
         _, error = first.communicate(timeout=5)
@@ -188,15 +195,26 @@ class QuickActionPipelineTests(unittest.TestCase):
         self.wait_for("completed")
         self.assertEqual(self.wait_for("engine_start")[0]["config"], str(config.resolve()))
 
-    def test_two_batch_root_override_selects_its_virtual_environment(self):
+    def test_default_python_uses_the_project_virtual_environment(self):
         self.env.pop("TRANSLATOR_PYTHON")
-        binary = self.root / "custom engine/.venv/bin/python"
+        binary = self.root / ".venv/bin/python"
         binary.parent.mkdir(parents=True)
         binary.symlink_to(sys.executable)
-        self.env["TRANSLATOR_TWO_BATCH_ROOT"] = "custom engine"
         result = self.run_action("Explicit input.")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.wait_for("completed")
+
+    def test_explicit_overrides_win_over_installed_runtime_paths(self):
+        config = self.root / "selected config.json"
+        self.env["TRANSLATOR_CONFIG"] = str(config)
+        (self.root / "build/runtime.env").write_text(
+            "_TRANSLATOR_INSTALLED_CONFIG=/unused/config.json\n"
+            "_TRANSLATOR_INSTALLED_PYTHON=/unused/python\n"
+        )
+        result = self.run_action("Explicit input.")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.wait_for("completed")
+        self.assertEqual(self.wait_for("engine_start")[0]["config"], str(config.resolve()))
 
     def test_missing_python_fails_before_capture_or_window(self):
         self.env["TRANSLATOR_PYTHON"] = str(self.root / "missing python")
@@ -209,11 +227,14 @@ class QuickActionPipelineTests(unittest.TestCase):
         environment = self.root / "isolated python"
         venv.EnvBuilder(with_pip=False, symlinks=True).create(environment)
         self.env["TRANSLATOR_PYTHON"] = str(environment / "bin/python")
-        result = self.run_action("Explicit input.")
+        self.env["PATH"] = os.pathsep.join((str(environment / "bin"), self.env["PATH"]))
+        result = self.run_action()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.wait_for("completed")
-        prefix = Path(self.wait_for("engine_start")[0]["python_prefix"])
-        self.assertEqual(prefix.resolve(), environment.resolve())
+        for event in ("engine_start", "capture_start", "window"):
+            with self.subTest(event=event):
+                prefix = Path(self.wait_for(event)[0]["python_prefix"])
+                self.assertEqual(prefix.resolve(), environment.resolve())
 
 
 if __name__ == "__main__":

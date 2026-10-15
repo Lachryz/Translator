@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import replace
 import io
 import json
 import os
@@ -9,13 +8,12 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
-from support import requires_two_batch
 
 from paragraph_translator import (
     ParagraphTranslator,
     Settings,
     TemplateRepository,
-    TwoBatchGateway,
+    StreamingGateway,
     citation_contract_errors,
     decode_utf8_input,
     extract_inline_markdown_links,
@@ -519,15 +517,15 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "duplicate request ID: P0001"):
             ParagraphTranslator._payload_by_id(rows)
 
-    def test_project_uses_two_batch_deepseek_flash_streaming(self):
+    def test_project_uses_embedded_deepseek_flash_streaming(self):
         settings = Settings.load(ROOT / "translator_config.json")
         self.assertEqual(settings.model, "deepseek-flash")
 
-        with tempfile.TemporaryDirectory() as backend, patch("dotenv.load_dotenv"), patch.dict(
+        with patch("dotenv.load_dotenv"), patch.dict(
             os.environ,
             {"DEEPSEEK_URL": "https://example.invalid", "DEEPSEEK_KEY": "test-key"},
         ):
-            gateway = TwoBatchGateway(replace(settings, two_batch_root=Path(backend)))
+            gateway = StreamingGateway(settings)
 
         self.assertEqual(gateway._config["api"]["id"], "deepseek")
         self.assertEqual(gateway._config["model"]["name"], "deepseek-flash")
@@ -573,9 +571,8 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse(is_english_phrase("公司治理", 8))
         self.assertEqual(phrase_max_tokens(4096), 128)
 
-    @requires_two_batch
-    def test_two_batch_console_warning_never_leaks_into_translation_stdout(self):
-        gateway = object.__new__(TwoBatchGateway)
+    def test_transport_console_warning_never_leaks_into_translation_stdout(self):
+        gateway = object.__new__(StreamingGateway)
         gateway._config = {}
 
         def fake_run_stream(requests, config, validator):
@@ -583,7 +580,7 @@ class PipelineTests(unittest.TestCase):
             return [{"custom_id": "P0001", "response": "{}"}]
 
         captured = io.StringIO()
-        with patch("tobatch.runner.run_stream", side_effect=fake_run_stream):
+        with patch("translator_transport.runner.run_stream", side_effect=fake_run_stream):
             with contextlib.redirect_stdout(captured):
                 rows = gateway.run(
                     [],
@@ -593,9 +590,8 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(captured.getvalue(), "")
         self.assertEqual(rows[0]["custom_id"], "P0001")
 
-    @requires_two_batch
     def test_gateway_enables_structured_validation_for_single_paragraph_request(self):
-        gateway = object.__new__(TwoBatchGateway)
+        gateway = object.__new__(StreamingGateway)
         gateway._config = {}
 
         def fake_run_stream(requests, config, validator):
@@ -620,7 +616,7 @@ class PipelineTests(unittest.TestCase):
                 "response": '{"paragraph_id":"P0001","translation":"直出译文"}',
             }]
 
-        with patch("tobatch.runner.run_stream", side_effect=fake_run_stream):
+        with patch("translator_transport.runner.run_stream", side_effect=fake_run_stream):
             schema = json.loads(
                 (ROOT / "schemas/translation.single.schema.json").read_text(encoding="utf-8")
             )
@@ -628,9 +624,8 @@ class PipelineTests(unittest.TestCase):
 
         self.assertEqual(rows[0]["custom_id"], "P0001")
 
-    @requires_two_batch
     def test_gateway_accepts_preserved_markdown_link_misreported_as_unresolved(self):
-        gateway = object.__new__(TwoBatchGateway)
+        gateway = object.__new__(StreamingGateway)
         gateway._config = {}
         source_link = (
             "[What's Behind Amazon's Review Problem]"
@@ -664,7 +659,7 @@ class PipelineTests(unittest.TestCase):
                 "response": json.dumps(raw_payload),
             }]
 
-        with patch("tobatch.runner.run_stream", side_effect=fake_run_stream):
+        with patch("translator_transport.runner.run_stream", side_effect=fake_run_stream):
             schema = json.loads(
                 (ROOT / "schemas/translation.schema.json").read_text(encoding="utf-8")
             )
@@ -674,9 +669,8 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(payload["translation"], translated_link)
         self.assertEqual(payload["unresolved_citations"], [])
 
-    @requires_two_batch
     def test_gateway_accepts_quoted_statement_misreported_as_unresolved(self):
-        gateway = object.__new__(TwoBatchGateway)
+        gateway = object.__new__(StreamingGateway)
         gateway._config = {}
         source_quote = "“The appropriate enforcement actions were taken.”"
         raw_payload = {
@@ -708,7 +702,7 @@ class PipelineTests(unittest.TestCase):
                 "response": json.dumps(raw_payload),
             }]
 
-        with patch("tobatch.runner.run_stream", side_effect=fake_run_stream):
+        with patch("translator_transport.runner.run_stream", side_effect=fake_run_stream):
             schema = json.loads(
                 (ROOT / "schemas/translation.schema.json").read_text(encoding="utf-8")
             )
@@ -767,7 +761,6 @@ class PipelineTests(unittest.TestCase):
         ))
 
     def test_gesture_decision_is_deferred_until_network_requests_finish(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as temporary:
             gesture = Path(temporary) / "gesture"

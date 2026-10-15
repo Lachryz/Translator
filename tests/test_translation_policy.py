@@ -3,14 +3,13 @@ from __future__ import annotations
 import json
 import unittest
 from unittest.mock import patch
-from support import requires_two_batch
 
 from paragraph_translator import (
     ROOT,
     ParagraphTranslator,
     Settings,
     TemplateRepository,
-    TwoBatchGateway,
+    StreamingGateway,
     academic_contract_errors,
     extract_inline_markdown_links,
     extract_quoted_passages,
@@ -321,9 +320,8 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "source_year_preservation"):
             translator(InvalidGateway()).translate("The policy changed in 2021.")
 
-    @requires_two_batch
     def test_real_gateway_validator_restores_and_rejects_bad_transport(self):
-        gateway = object.__new__(TwoBatchGateway)
+        gateway = object.__new__(StreamingGateway)
         gateway._config = {}
         current = paragraph("Key audit matters (KAMs) inform users in 2020.")
         engine = translator(gateway)
@@ -346,16 +344,15 @@ class PolicyTests(unittest.TestCase):
             self.assertTrue(validator.validate(json.dumps(good), requests[0]).ok)
             return [{"custom_id": "P0001", "response": json.dumps(good)}]
 
-        with patch("tobatch.runner.run_stream", side_effect=runner):
+        with patch("translator_transport.runner.run_stream", side_effect=runner):
             rows = gateway.run(requests, engine.single_translation_schema)
         self.assertEqual(
             json.loads(rows[0]["response"])["translation"],
             "KAMs（关键审计事项）在2020年向用户提供信息。",
         )
 
-    @requires_two_batch
     def test_slot_fallback_retries_only_failed_paragraph(self):
-        gateway = object.__new__(TwoBatchGateway)
+        gateway = object.__new__(StreamingGateway)
         gateway._config = {}
         calls = []
 
@@ -419,7 +416,7 @@ class PolicyTests(unittest.TestCase):
             self.assertTrue(validator.validate(json.dumps(candidate), requests[0]).ok)
             return [{"custom_id": "P0001", "response": json.dumps(candidate)}]
 
-        with patch("tobatch.runner.run_stream", side_effect=runner):
+        with patch("translator_transport.runner.run_stream", side_effect=runner):
             output = translator(gateway).translate(
                 "Key audit matters (KAMs) inform KAMs users.\nInvestors learn.",
                 preserve_paragraphs=True,

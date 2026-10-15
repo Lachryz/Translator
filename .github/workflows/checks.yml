@@ -24,15 +24,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v10
       - name: Install development dependencies
-        run: python -m pip install -e '.[dev]'
+        run: uv sync --locked --group dev --python ${{ matrix.python }}
       - name: Check Python and shell syntax
         run: |
-          ruff check .
+          uv run --locked ruff check .
           zsh -n run_quick_action.sh
       - name: Run offline tests
-        # Tests requiring the private 2batch backend report explicit skips.
-        run: python -m unittest discover -s tests -v
+        run: uv run --locked python -m unittest discover -s tests -v
       - name: Build and sign native macOS helpers
         if: matrix.python == '3.13'
-        run: python install_quick_action.py --build-only
+        run: uv run --locked python install_quick_action.py --build-only

@@ -7,7 +7,6 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
-from support import requires_two_batch
 
 import httpx
 
@@ -67,7 +66,6 @@ class StreamTextTests(unittest.TestCase):
             self.assertFalse(complete)
         self.assertEqual(streamed_paragraph_translation(content, paragraph), ('证据（Smith，2020）。', True))
 
-    @requires_two_batch
     def test_preserved_multi_paragraph_stream_orders_parallel_responses_and_retries(self):
         calls = []
         attempts = {}
@@ -125,7 +123,7 @@ class StreamTextTests(unittest.TestCase):
                     pass
 
             translator = create_translator(ROOT / 'translator_config.json')
-            with patch('tobatch.runner._make_client', side_effect=lambda *args, **kwargs: Client()):
+            with patch('translator_transport.runner._make_client', side_effect=lambda *args, **kwargs: Client()):
                 output = translator.translate('First paragraph.\nSecond paragraph.', status=reporter, gesture_file=gesture)
 
         self.assertEqual(output, '\n\n'.join(final))
@@ -183,7 +181,6 @@ class StreamTextTests(unittest.TestCase):
         self.assertEqual(previews, [])
         self.assertEqual(reporter.mode, '多段落综合翻译')
 
-    @requires_two_batch
     def test_stream_preview_precedes_completion_and_resets_on_both_retry_types(self):
         snapshots = []
         calls = []
@@ -226,7 +223,7 @@ class StreamTextTests(unittest.TestCase):
 
             translator = create_translator(ROOT / 'translator_config.json')
             translator.gateway._config['task_table']['transport_retry_delay_seconds'] = 0.001
-            with patch('tobatch.runner._make_client', return_value=Client()):
+            with patch('translator_transport.runner._make_client', return_value=Client()):
                 output = translator.translate('Market liquidity affects price discovery.', status=reporter)
 
         self.assertEqual(output, final)

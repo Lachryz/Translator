@@ -371,7 +371,7 @@ def main(argv: list[str] | None = None) -> None:
     ):
         parser.error(
             f"Python interpreter is not executable: {paths.python_path}. "
-            "Configure two_batch_root or TRANSLATOR_PYTHON, or use --build-only."
+            "Run uv sync, set TRANSLATOR_PYTHON, or use --build-only."
         )
     build_dir = ROOT / "build"
     build_dir.mkdir(exist_ok=True)

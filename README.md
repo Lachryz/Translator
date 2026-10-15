@@ -2,55 +2,44 @@
 
 macOS 英文转中文工具。选中文本，按 `Control+Option+Command+T`，即可在原生窗口查看流式译文；完成后，最终译文自动复制到剪贴板。也可通过 Python API 或标准输入调用同一翻译引擎。
 
-默认使用 `deepseek-flash`，侧重会计、金融、经济与计量领域的学术表达。翻译请求通过 2batch 发送，模型输出经过 JSON Schema 和引用、缩写、URL 等约束校验。
+默认使用 `deepseek-flash`，侧重会计、金融、经济与计量领域的学术表达。Translator 内置请求层，负责流式传输、并发与重试；模型输出经过 JSON Schema 和引用、缩写、URL 等约束校验。
 
 ## 环境要求
 
 - macOS，已安装 Xcode Command Line Tools，可执行 `xcrun swiftc`。
 - Python 3.11 或更新版本。
-- 已取得访问权限并准备好 [2batch](https://github.com/Lachryz/2batch) 源码及其 Python 依赖。2batch 当前为私有仓库；仅克隆本仓库不能完成真实翻译。
-- 可用的 OpenAI 兼容 DeepSeek 接口地址及 API 密钥。
-
-默认目录结构如下；其他位置可通过配置指定：
-
-```text
-workspace/
-├── Translator/
-└── 2batch/
-    ├── .venv/bin/python
-    ├── .env
-    └── tobatch/
-```
+- [uv](https://docs.astral.sh/uv/)：创建项目虚拟环境并按锁文件安装依赖。
+- 有权调用所配置模型的 DeepSeek API 密钥。
 
 ## 安装
 
-克隆项目，复用已安装 2batch 依赖的虚拟环境：
+克隆项目并创建独立的 `.venv`：
 
 ```bash
 git clone https://github.com/Lachryz/Translator.git
 cd Translator
-../2batch/.venv/bin/python -m pip install -e .
+uv sync --locked
+cp -n .env.example .env
 ```
 
-在 `../2batch/.env` 中配置以下两项；如文件已存在，编辑并补充配置，不要覆盖其他凭据：
+在项目根目录的 `.env` 中填写 API 密钥；如果已有该文件，直接编辑，不要覆盖现有凭据：
 
 ```dotenv
-DEEPSEEK_URL=<你的 OpenAI 兼容 API 基础地址>
 DEEPSEEK_KEY=<你的 API 密钥>
 ```
 
-两项均必需。项目提供 [.env.example](.env.example) 作为格式示例，不包含有效凭据。默认读取 2batch 的 `.env`；若使用本项目的 `.env`，请将 `translator_config.json` 的 `env_file` 改为 `".env"`。`.env` 和本机构建文件均不应提交到 Git。
+只有 `DEEPSEEK_KEY` 必填。接口地址默认使用 `https://api.deepseek.com`，模型和其他参数可保持默认；只有需要其他 OpenAI 兼容地址时，才在 `.env` 中添加 `DEEPSEEK_URL` 覆盖。项目提供 [.env.example](.env.example) 作为格式示例，不包含有效凭据。默认读取项目根目录的 `.env`，也可通过配置指定其他凭据文件。`.env` 和本机构建文件已列入忽略规则；真实密钥只应保存在本地凭据文件或环境变量中，不应写入源码、示例或文档，也不应提交到 Git。
 
 先只构建和签名原生组件，检查编译环境：
 
 ```bash
-../2batch/.venv/bin/python install_quick_action.py --build-only
+uv run --locked python install_quick_action.py --build-only
 ```
 
 该命令不安装系统服务，也不注册常驻进程。确认构建成功后，执行正式安装：
 
 ```bash
-../2batch/.venv/bin/python install_quick_action.py
+uv run --locked python install_quick_action.py
 ```
 
 安装器先在临时目录完成 Swift 编译和本地签名，再替换构建产物。正式安装会创建或更新：
@@ -89,28 +78,29 @@ DEEPSEEK_KEY=<你的 API 密钥>
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
+| `deepseek_url` | `https://api.deepseek.com` | API 基础地址，可由 `DEEPSEEK_URL` 覆盖 |
 | `model` | `deepseek-flash` | 模型名称 |
 | `temperature` | `1` | 采样温度 |
 | `max_tokens` | `4096` | 普通翻译请求输出上限 |
 | `seed` | `42` | 请求种子 |
-| `concurrency` | `100` | 2batch 内部请求并发上限 |
+| `concurrency` | `100` | 内嵌请求层的并发上限 |
 | `validation_retries` | `2` | 模型输出校验失败后的重试次数 |
 | `prompt_token_limit` | `64000` | 请求提示词 token 限制 |
 | `phrase_word_limit` | `8` | 词组模式英文词数上限 |
-| `two_batch_root` | `../2batch` | 2batch 源码目录 |
-| `env_file` | `null` | 使用 2batch 根目录的 `.env`；也可指定文件路径 |
+| `env_file` | `".env"` | 凭据文件；`null` 或省略时使用配置文件目录下的 `.env` |
 
 支持以下环境变量：
 
 | 环境变量 | 用途 |
 | --- | --- |
+| `DEEPSEEK_KEY` | 必填的 API 密钥 |
+| `DEEPSEEK_URL` | 可选的 API 基础地址覆盖 |
 | `TRANSLATOR_CONFIG` | 指定配置文件；CLI 的 `--config` 和 Python API 的显式 `config_path` 优先 |
-| `TRANSLATOR_TWO_BATCH_ROOT` | 覆盖 2batch 源码目录 |
 | `TRANSLATOR_ENV_FILE` | 覆盖凭据文件路径 |
-| `TRANSLATOR_PYTHON` | 覆盖桌面启动器使用的 Python 解释器 |
+| `TRANSLATOR_PYTHON` | 覆盖桌面启动器使用的 Python 解释器，默认使用项目 `.venv/bin/python` |
 | `TRANSLATOR_LOG_DIR` | 覆盖选区与自动复制日志目录 |
 
-桌面启动器会复用 `build/runtime.env` 中记录的配置和 Python 路径，该文件不含凭据。修改配置内的 `two_batch_root` 后，可重新执行 `--build-only` 刷新缓存；更换项目位置或服务入口仍需正式安装。安装器也支持 `--config /path/to/config.json`。终端中临时设置的变量不会自动进入已运行的常驻进程；日常配置宜保存在配置文件中。
+桌面启动器会复用 `build/runtime.env` 中记录的配置和 Python 路径，该文件不含凭据。更换解释器后可重新执行 `--build-only` 刷新缓存；更换项目位置或服务入口仍需正式安装。安装器也支持 `--config /path/to/config.json`。终端中临时设置的变量不会自动进入已运行的常驻进程；日常配置宜保存在配置文件中。
 
 ## 命令行与 Python API
 
@@ -118,7 +108,7 @@ DEEPSEEK_KEY=<你的 API 密钥>
 
 ```bash
 printf '%s' 'Market liquidity affects price discovery.' | \
-  ../2batch/.venv/bin/python paragraph_translator.py --preserve-paragraphs
+  uv run --locked paragraph-translator --preserve-paragraphs
 ```
 
 Python 调用：
@@ -145,16 +135,17 @@ print(result)
 
 ## 开发与诊断
 
-测试使用模拟传输，不调用真实模型。完整测试需要可导入的 2batch 及其依赖；缺失时，相关集成测试会明确跳过。可使用无效测试凭据运行，避免依赖本地密钥：
+先安装开发依赖，再运行离线测试。测试覆盖内置请求层与翻译引擎的集成，使用模拟传输，不调用真实模型，也不需要本地密钥：
 
 ```bash
+uv sync --locked --group dev
 DEEPSEEK_URL=https://example.invalid/v1 DEEPSEEK_KEY=test-only \
-  ../2batch/.venv/bin/python -m unittest discover -s tests -v
+  uv run --locked python -m unittest discover -s tests -v
 ```
 
-项目结构、修改约束和验证范围见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+公开 CI 同样执行完整离线测试，包括请求层与翻译引擎的集成测试。项目结构、修改约束和验证范围见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 - 热键及权限日志：`~/Library/Logs/Translator/hotkey.log`
 - 选区与复制日志：`~/Library/Logs/Translator/selection_capture.log`
 
-选区诊断日志只记录权限、状态、进程和字节数，不记录选中的正文。热键无响应时，先检查辅助功能权限和上述日志；提示找不到 Python、2batch 或构建产物时，检查配置并重新运行安装器。
+选区诊断日志只记录权限、状态、进程和字节数，不记录选中的正文。热键无响应时，先检查辅助功能权限和上述日志；提示找不到 Python 或构建产物时，检查配置并重新运行安装器。接口认证失败时，检查 `.env` 的地址、密钥和模型权限。

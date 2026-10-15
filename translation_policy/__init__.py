@@ -182,7 +182,7 @@ def render_slot_payload(
 
 
 def contract_issues(errors: list[dict]) -> tuple[dict, ...]:
-    """Use the same machine-readable location format as 2batch schema errors."""
+    """Use the shared machine-readable location format for validation errors."""
     return tuple(
         {
             **error,

@@ -4,7 +4,7 @@
 
 ## 最简调用
 
-在本项目根目录运行，或先执行 `python -m pip install -e .` 安装本项目；Python 环境还须包含 2batch 的依赖。
+在项目根目录执行 `uv sync --locked`，并按 README 在 `.env` 中配置 `DEEPSEEK_KEY`。使用 `uv run --locked python` 运行 Python 脚本即可加载项目及其依赖。
 
 ```python
 from translator_api import translate
@@ -73,7 +73,7 @@ get_translator(config_path: str | Path | None = None) -> Translator
 clear_translator_cache() -> None
 ```
 
-配置文件选择顺序为：显式 `config_path`、`TRANSLATOR_CONFIG`、项目根目录的 `translator_config.json`。相对配置路径按当前工作目录解析；配置内的相对路径按配置文件所在目录解析。2batch 目录和凭据文件还可由 `TRANSLATOR_TWO_BATCH_ROOT`、`TRANSLATOR_ENV_FILE` 覆盖。
+配置文件选择顺序为：显式 `config_path`、`TRANSLATOR_CONFIG`、项目根目录的 `translator_config.json`。相对配置路径按当前工作目录解析；配置内的相对路径按配置文件所在目录解析。`env_file` 默认为 `".env"`，设为 `null` 或省略时也读取配置文件目录下的 `.env`；可用 `TRANSLATOR_ENV_FILE` 覆盖凭据文件路径。只有 `DEEPSEEK_KEY` 必填，API 基础地址默认使用配置中的 `deepseek_url`（`https://api.deepseek.com`）；`DEEPSEEK_URL` 可选，用于覆盖该地址。模型和其他参数可保持默认。
 
 `translate()`、`translate_with_metadata()` 和 `get_translator()` 共享按已解析配置路径缓存的客户端，最多缓存 4 个；并发首次访问同一路径时只初始化一个引擎。配置内容或路径覆盖变量改变后，需要清除缓存，使下一次调用重新初始化；已有的显式 `Translator` 实例应重新创建：
 
@@ -120,7 +120,7 @@ except TranslationFailed as exc:
 ```bash
 printf '%s' 'The first paragraph.
 The second paragraph.' | \
-  ../2batch/.venv/bin/python paragraph_translator.py --preserve-paragraphs
+  uv run --locked paragraph-translator --preserve-paragraphs
 ```
 
 成功结果只写入标准输出，错误写入标准错误并返回退出码 `1`。调用方应检查退出码；不加 `--preserve-paragraphs` 时，多段结果使用 Markdown 列表。
@@ -129,7 +129,7 @@ The second paragraph.' | \
 
 ```bash
 printf '%s' 'Market liquidity affects price discovery.' | \
-  ../2batch/.venv/bin/python paragraph_translator.py --config /path/to/config.json
+  uv run --locked paragraph-translator --config /path/to/config.json
 ```
 
-`--status-file`、`--stream-file` 和 `--gesture-file` 用于桌面启动器的进度、增量事件和排版协作，普通脚本调用不需要传入。`paragraph_translator.py --help` 可离线查看完整参数，不发送模型请求。
+也可将 `uv run --locked paragraph-translator` 替换为 `uv run --locked python paragraph_translator.py`。`--status-file`、`--stream-file` 和 `--gesture-file` 用于桌面启动器的进度、增量事件和排版协作，普通脚本调用不需要传入。`uv run --locked paragraph-translator --help` 可离线查看完整参数，不发送模型请求。

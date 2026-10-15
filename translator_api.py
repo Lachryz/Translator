@@ -83,7 +83,7 @@ class Translator:
         progress = _ProgressSnapshot()
         try:
             # One engine instance is shared for efficiency. Serialize top-level
-            # calls while preserving 2batch's internal paragraph concurrency.
+            # calls while preserving the internal paragraph concurrency.
             with self._lock:
                 translated = self._engine.translate(
                     text,

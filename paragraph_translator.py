@@ -19,7 +19,7 @@ from translation_policy import (
     render_slot_payload, restore_payload, slot_material,
 )
 from translation_policy.translation_contract import TOKENS
-from translator_runtime import resolve_config_path, resolve_runtime_paths
+from translator_runtime import DEFAULT_DEEPSEEK_URL, resolve_config_path, resolve_runtime_paths
 
 ROOT = Path(__file__).resolve().parent
 _SURROGATE_CHARACTER = re.compile(r"[\ud800-\udfff]")
@@ -820,8 +820,8 @@ class Settings:
     validation_retries: int
     prompt_token_limit: int
     phrase_word_limit: int
-    two_batch_root: Path
     env_file: Path
+    deepseek_url: str = DEFAULT_DEEPSEEK_URL
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Settings":
@@ -837,8 +837,8 @@ class Settings:
             validation_retries=int(raw["validation_retries"]),
             prompt_token_limit=int(raw["prompt_token_limit"]),
             phrase_word_limit=int(raw.get("phrase_word_limit", 8)),
-            two_batch_root=runtime.two_batch_root,
             env_file=runtime.env_file,
+            deepseek_url=str(raw.get("deepseek_url", DEFAULT_DEEPSEEK_URL)).strip(),
         )
 
 
@@ -919,19 +919,17 @@ class TemplateRepository:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
-class TwoBatchGateway:
+class StreamingGateway:
     def __init__(self, settings: Settings) -> None:
-        if not settings.two_batch_root.is_dir():
-            raise FileNotFoundError(f"2batch project not found: {settings.two_batch_root}")
-        sys.path.insert(0, str(settings.two_batch_root))
-
         from dotenv import load_dotenv
 
         load_dotenv(settings.env_file)
-        url = os.environ.get("DEEPSEEK_URL", "").strip()
+        url = os.environ.get("DEEPSEEK_URL", "").strip() or settings.deepseek_url
         key = os.environ.get("DEEPSEEK_KEY", "").strip()
-        if not url or not key:
-            raise RuntimeError(f"DEEPSEEK_URL/DEEPSEEK_KEY not found in {settings.env_file}")
+        if not key:
+            raise RuntimeError(f"DEEPSEEK_KEY not found in {settings.env_file} or environment")
+        if not url:
+            raise RuntimeError("Set a non-empty DEEPSEEK_URL or deepseek_url in the configuration")
 
         self._config = {
             "api": {"id": "deepseek", "url": url, "key": key},
@@ -959,14 +957,15 @@ class TwoBatchGateway:
         *,
         on_content: Callable[[str, str], None] | None = None,
     ) -> list[dict[str, Any]]:
-        from tobatch.runner import run_stream
-        from tobatch.validation import OutputValidator, ValidationResult
+        from translator_transport.runner import run_stream
+        from translator_transport.validation import OutputValidator, ValidationResult
 
         slots_mode = bool(schema and schema.get("x-slot-translation-contract"))
         final_schema = schema
         if slots_mode:
             name = "translation.schema.json" if schema.get("x-citation-contract") else "translation.single.schema.json"
             final_schema = json.loads((ROOT / "schemas" / name).read_text(encoding="utf-8"))
+        base_validator = OutputValidator(final_schema) if final_schema is not None else None
 
         def resolve(payload: Any, paragraph: dict) -> tuple[Any, tuple[dict, ...]]:
             if slots_mode:
@@ -996,7 +995,8 @@ class TwoBatchGateway:
                     ensure_ascii=False,
                     separators=(",", ":"),
                 )
-                base_result = OutputValidator(final_schema).validate(normalized_content, req)
+                assert base_validator is not None
+                base_result = base_validator.validate(normalized_content, req)
                 if not base_result.ok:
                     return base_result
 
@@ -1110,20 +1110,20 @@ class ParagraphTranslator:
         for row in rows:
             custom_id = str(row.get("custom_id", ""))
             if custom_id in payloads:
-                raise RuntimeError(f"2batch returned duplicate request ID: {custom_id}")
+                raise RuntimeError(f"Transport returned duplicate request ID: {custom_id}")
             if row.get("error"):
                 details = row.get("validation_error_details") or []
                 citation_only = bool(details) and all(
                     detail.get("validator") == "citation_contract" for detail in details
                 )
                 if not citation_only:
-                    raise RuntimeError(f"2batch request {custom_id} failed: {row['error']}")
+                    raise RuntimeError(f"Translation request {custom_id} failed: {row['error']}")
             try:
                 payload = make_utf8_safe(json.loads(str(row["response"])))
             except (KeyError, json.JSONDecodeError) as exc:
-                raise RuntimeError(f"2batch request {custom_id} returned unusable JSON") from exc
+                raise RuntimeError(f"Translation request {custom_id} returned unusable JSON") from exc
             if not isinstance(payload, dict):
-                raise RuntimeError(f"2batch request {custom_id} did not return a JSON object")
+                raise RuntimeError(f"Translation request {custom_id} did not return a JSON object")
             payloads[custom_id] = normalize_translation_payload(payload)
         return payloads
 
@@ -1172,7 +1172,7 @@ class ParagraphTranslator:
         )
         context = self._payload_by_id(context_rows).get("CONTEXT")
         if context is None:
-            raise RuntimeError("2batch did not return the document context")
+            raise RuntimeError("Transport did not return the document context")
         return context
 
     def _translation_system_prompt(
@@ -1325,10 +1325,10 @@ class ParagraphTranslator:
             expected_id = paragraph["paragraph_id"]
             payload = translated.get(expected_id)
             if payload is None:
-                raise RuntimeError(f"2batch did not return {expected_id}")
+                raise RuntimeError(f"Transport did not return {expected_id}")
             if payload.get("paragraph_id") != expected_id:
                 raise RuntimeError(
-                    f"2batch ID mismatch: expected {expected_id}, "
+                    f"Translation ID mismatch: expected {expected_id}, "
                     f"got {payload.get('paragraph_id')}"
                 )
             if "translation_source" in paragraph:
@@ -1514,7 +1514,7 @@ def create_translator(config_path: str | Path | None = None) -> ParagraphTransla
     """Create the shared translation engine used by the CLI and Python API."""
     settings = Settings.load(config_path)
     templates = TemplateRepository(ROOT / "prompts")
-    return ParagraphTranslator(settings, TwoBatchGateway(settings), templates)
+    return ParagraphTranslator(settings, StreamingGateway(settings), templates)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1552,7 +1552,7 @@ def main() -> int:
     try:
         translator = create_translator(args.config)
         # Load the transport/validators while stdin capture runs in parallel.
-        from tobatch import runner as _runner  # noqa: F401 - preload while input is captured
+        from translator_transport import runner as _runner  # noqa: F401 - preload during capture
 
         source = decode_utf8_input(sys.stdin.buffer.read())
         status = StatusReporter(

@@ -13,10 +13,8 @@ fi
 export TRANSLATOR_CONFIG="${CONFIG_PATH:A}"
 if [[ -n "${TRANSLATOR_PYTHON:-}" ]]; then
   PYTHON="$TRANSLATOR_PYTHON"
-elif [[ -n "${TRANSLATOR_TWO_BATCH_ROOT:-}" ]]; then
-  PYTHON="$TRANSLATOR_TWO_BATCH_ROOT/.venv/bin/python"
 else
-  PYTHON="${_TRANSLATOR_INSTALLED_PYTHON:-$SCRIPT_DIR/../2batch/.venv/bin/python}"
+  PYTHON="${_TRANSLATOR_INSTALLED_PYTHON:-$SCRIPT_DIR/.venv/bin/python}"
 fi
 if [[ "$PYTHON" == '~/'* ]]; then
   PYTHON="$HOME/${PYTHON#\~/}"

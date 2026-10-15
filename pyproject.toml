@@ -1,6 +1,6 @@
 [project]
 name = "selected-paragraph-translator"
-version = "0.2.0"
+version = "0.3.0"
 description = "macOS Quick Action for context-aware multi-paragraph academic translation"
 requires-python = ">=3.11"
 readme = "README.md"
@@ -8,10 +8,12 @@ dependencies = [
     "Jinja2>=3.1,<4",
     "jsonschema>=4,<5",
     "python-dotenv>=1,<2",
+    "httpx>=0.27,<1",
+    "openai>=1.50,<3",
 ]
 
-[project.optional-dependencies]
-dev = ["httpx>=0.27,<1", "ruff>=0.14,<1"]
+[dependency-groups]
+dev = ["ruff>=0.14,<1"]
 
 [project.urls]
 Repository = "https://github.com/Lachryz/Translator"
@@ -31,6 +33,7 @@ only-include = [
     "translator_runtime.py",
     "shortcut_gesture.py",
     "translation_policy",
+    "translator_transport",
     "prompts",
     "schemas",
     "translator_config.json",
@@ -40,7 +43,7 @@ only-include = [
 include = [
     "*.py", "*.swift", "*.sh", "*.json", "*.md", "pyproject.toml",
     ".env.example", ".gitignore", "prompts/", "schemas/",
-    "translation_policy/", "tests/", ".github/",
+    "translation_policy/", "translator_transport/", "tests/", ".github/", "uv.lock",
 ]
 
 [tool.ruff]

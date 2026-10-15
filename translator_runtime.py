@@ -9,6 +9,7 @@ from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CONFIG = ROOT / "translator_config.json"
+DEFAULT_DEEPSEEK_URL = "https://api.deepseek.com"
 
 
 def resolve_config_path(config_path: str | Path | None = None) -> Path:
@@ -32,7 +33,6 @@ def _resolve_path(
 @dataclass(frozen=True)
 class RuntimePaths:
     config_path: Path
-    two_batch_root: Path
     env_file: Path
     python_path: Path
 
@@ -45,7 +45,8 @@ def resolve_runtime_paths(
     """Resolve relative paths beside the config, independently of the caller cwd.
 
     Only file locations are resolved here; credential contents are never read.
-    A null or omitted env_file uses the backend's .env file.
+    A null or omitted env_file uses .env beside the selected configuration.
+    The default interpreter belongs to this project, even for external configs.
     """
     path = resolve_config_path(config_path)
     if config is None:
@@ -53,20 +54,14 @@ def resolve_runtime_paths(
     if not isinstance(config, Mapping):
         raise ValueError("translator configuration must be a JSON object")
     base = path.parent
-    backend = _resolve_path(
-        os.environ.get("TRANSLATOR_TWO_BATCH_ROOT")
-        or config.get("two_batch_root", "../2batch"),
-        base,
-        "two_batch_root",
-    )
     env_value = os.environ.get("TRANSLATOR_ENV_FILE") or config.get("env_file")
     env_file = (
         _resolve_path(env_value, base, "env_file")
-        if env_value is not None else backend / ".env"
+        if env_value is not None else base / ".env"
     )
     python_value = os.environ.get("TRANSLATOR_PYTHON")
     python_path = (
         _resolve_path(python_value, base, "TRANSLATOR_PYTHON", follow_symlinks=False)
-        if python_value else backend / ".venv" / "bin" / "python"
+        if python_value else ROOT / ".venv" / "bin" / "python"
     )
-    return RuntimePaths(path, backend, env_file, python_path)
+    return RuntimePaths(path, env_file, python_path)
