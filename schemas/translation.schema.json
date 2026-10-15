@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-citation-contract": true,
+  "x-markdown-link-contract": true,
+  "x-quoted-prose-contract": true,
+  "x-paragraph-id-contract": true,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["paragraph_id", "translation", "citations", "unresolved_citations"],
+  "properties": {
+    "paragraph_id": {
+      "type": "string",
+      "pattern": "^P[0-9]{4,}$"
+    },
+    "translation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["citation_id", "source_text", "citation_style", "works"],
+            "properties": {
+              "citation_id": {
+                "type": "string",
+                "pattern": "^C[0-9]{3,}$"
+              },
+              "source_text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "citation_style": {
+                "type": "string",
+                "enum": ["narrative", "parenthetical"]
+              },
+              "works": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["authors", "author_form", "year", "year_suffix"],
+                  "properties": {
+                    "authors": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "author_form": {
+                      "type": "string",
+                      "enum": ["single", "dual", "et_al"]
+                    },
+                    "year": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 2999
+                    },
+                    "year_suffix": {
+                      "type": "string",
+                      "pattern": "^[a-z]?$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["citation_id", "source_text", "citation_style", "note_number"],
+            "properties": {
+              "citation_id": {
+                "type": "string",
+                "pattern": "^C[0-9]{3,}$"
+              },
+              "source_text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "citation_style": {
+                "const": "superscript"
+              },
+              "note_number": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    "unresolved_citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_text", "reason"],
+        "properties": {
+          "source_text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

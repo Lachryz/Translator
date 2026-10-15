@@ -1,0 +1,55 @@
+[project]
+name = "selected-paragraph-translator"
+version = "0.2.0"
+description = "macOS Quick Action for context-aware multi-paragraph academic translation"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "Jinja2>=3.1,<4",
+    "jsonschema>=4,<5",
+    "python-dotenv>=1,<2",
+]
+
+[project.optional-dependencies]
+dev = ["httpx>=0.27,<1", "ruff>=0.14,<1"]
+
+[project.urls]
+Repository = "https://github.com/Lachryz/Translator"
+Issues = "https://github.com/Lachryz/Translator/issues"
+
+[project.scripts]
+paragraph-translator = "paragraph_translator:main"
+
+[build-system]
+requires = ["hatchling>=1.25,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = [
+    "paragraph_translator.py",
+    "translator_api.py",
+    "translator_runtime.py",
+    "shortcut_gesture.py",
+    "translation_policy",
+    "prompts",
+    "schemas",
+    "translator_config.json",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "*.py", "*.swift", "*.sh", "*.json", "*.md", "pyproject.toml",
+    ".env.example", ".gitignore", "prompts/", "schemas/",
+    "translation_policy/", "tests/", ".github/",
+]
+
+[tool.ruff]
+target-version = "py311"
+exclude = ["build", "dist", ".venv"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

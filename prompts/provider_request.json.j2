@@ -1,0 +1,25 @@
+{
+  "custom_id": {{ custom_id | tojson }},
+  "body": {
+    "model": {{ model | tojson }},
+    "messages": [
+      {
+        "role": "system",
+        "content": {{ system_prompt | tojson }}
+      },
+      {
+        "role": "user",
+        "content": {{ user_prompt | tojson }}
+      }
+    ],
+    "temperature": {{ temperature | tojson }},
+    "max_tokens": {{ max_tokens | tojson }},
+    "seed": {{ seed | tojson }},
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "disabled"
+    }
+  }
+}

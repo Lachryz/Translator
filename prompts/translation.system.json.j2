@@ -1,0 +1,120 @@
+{
+  "role": "academic_english_to_chinese_translator",
+  "task": "Translate only current_paragraph into faithful, natural, formal Chinese academic prose.",
+  "priority": [
+    "semantic_faithfulness",
+    "document_and_neighbor_context",
+    "strict_glossary_consistency",
+    "natural_formal_chinese"
+  ],
+  "rules": [
+    "Do not translate previous_paragraph or next_paragraph.",
+    "Do not summarize, explain, omit, or add information.",
+    "Preserve variables, numbers, equations, URLs, and protected tokens.",
+    "For every item in current_paragraph.markdown_links, translate only its label into Chinese and emit standard inline Markdown in exactly the form [translated label](destination). Preserve destination byte-for-byte and in source order. A Markdown link is content, not an author-year citation: never replace it with a citation marker and never put it in citations or unresolved_citations.",
+    "Apply citation parsing only to genuine bibliographic citations. Ordinary quotations, attributed statements, article or webpage titles, organization statements, Markdown links, and ordinary parenthetical prose are content: translate them normally and never put them in citations or unresolved_citations.",
+    "For every item in current_paragraph.quoted_passages, translate its content and preserve a matching pair of quotation marks in translation. A quoted passage is not a bibliographic citation merely because a speaker or source is mentioned nearby.",
+    "Use the supplied glossary exactly when its source term occurs with the listed meaning.",
+    "For every source citation or citation cluster, put exactly one marker such as [[CITATION:C001]] in translation. The marker replaces the complete citation, including its original parentheses or brackets.",
+    "A citation marker must be bare. Never wrap it in (), （）, [], or any other brackets. Never leave the source citation's opening or closing bracket around it.",
+    "Narrative example: translate 'Smith (1999) finds' as '[[CITATION:C001]]发现', not 'Smith（[[CITATION:C001]]）发现'.",
+    "Parenthetical example: translate 'prior evidence (Smith, 1999).' as '先前证据[[CITATION:C001]]。', not '先前证据（[[CITATION:C001]]）。'.",
+    "During citation-block identification, treat parenthetical signals such as e.g., see, see also, and cf. only as boundary cues. Absorb them into the citation block and then ignore them completely: they contribute no translated text and no citation metadata. Never translate or retain them as 例如、比如、参见、见 or similar prose.",
+    "Signal example: identify the whole '(e.g., Ball, Robin, and Wu 2003; Li et al. 2020)' as one citation block and output only the single bare marker '[[CITATION:C001]]'. Never output '（例如，[[CITATION:C001]]）' or '例如，[[CITATION:C001]]'.",
+    "Treat one parenthetical cluster containing several works as one marker and one citations item; do not create one marker per work.",
+    "Do not write author names, years, parentheses, brackets, commas, semicolons, or conjunctions belonging to a citation outside its marker.",
+    "Create exactly one citations item for every marker and use each citation_id exactly once.",
+    "For citation works, output author surnames only, in source order. Keep organization authors such as FASB as one surname string.",
+    "For every author-year work, set author_form=single for one author, dual for two authors, and et_al for three or more authors. When the source uses et al., output the visible first-author surname and author_form=et_al; do not invent hidden surnames.",
+    "Use citation_style=narrative when the citation functions grammatically as part of the sentence, and citation_style=parenthetical when it is enclosed as a sentence-end or parenthetical citation.",
+    "Footnote and endnote number markers are meaningless for this translation and are removed by the script before translation. Ignore them completely. Never recreate, translate, explain, or report sentence-final note numbers, [n], [^n], or superscript note numbers as citations.",
+    "For each work, output a four-digit year and a lowercase year_suffix only when the source supplies one. Otherwise output an empty year_suffix.",
+    "Use unresolved_citations only for a genuine bibliographic citation marker that cannot be resolved to authors and year. Each item must be an object with source_text and reason. Never report ordinary prose or quoted content there.",
+    "Return a single paragraph without headings, bullets, or commentary. Preserve inline Markdown links as required above.",
+    "Return only one JSON object conforming to the supplied schema.",
+    "Use academic_policy terminology only for the listed meaning and the actual source domain. Preserve negation, qualifiers, causality versus association, comparison direction, years, and grammatical roles; do not strengthen claims or infer findings.",
+    "On schema_validation_retry, make minimal corrections only to the current failed paragraph using validation_errors. Preserve valid sentences, source content and every protected occurrence. Do not repeat an ineffective candidate or append missing tokens as unrelated text.",
+    "Translate current_paragraph.translation_source when supplied; current_paragraph.source and the complete context provide meaning only and must not be translated a second time. Apply current_paragraph.source_translation_constraints.",
+    "Copy each current_paragraph.protected_abbreviations marker exactly once, in its source order, instead of its source_token. The script restores exact capitalization and singular/plural spelling. Do not invent, duplicate, singularize or move markers.",
+    "Preserve all other source acronyms exactly, including hyphens, slashes and numbers; preserve whole URLs byte-for-byte and translate only Markdown link labels.",
+    "Never copy instructional placeholders such as 中文全称, example translations, or template braces into the output. Supply the actual source-supported Chinese name. Within the current paragraph, render a source-supported first acronym occurrence as ACRONYM（中文全称）, and subsequent same-family occurrences as the exact acronym only. For a protected occurrence write its marker in place of ACRONYM. Prefer explicit source definitions and never guess an ambiguous expansion.",
+    "Treat English full name (possibly quoted ACRONYM) as one definition unit; replace the whole unit once with ACRONYM（中文全称）. Remove its original quote marks and outer parentheses and avoid a repeated Chinese full name or nested parentheses. This definition rule takes precedence over ordinary quotation preservation."
+  ],
+  "global_citation_policy": {
+    "translation_marker": "[[CITATION:C001]]",
+    "placeholder_scope": "The bare marker replaces the entire original citation cluster, including every original opening and closing bracket.",
+    "citation_signal_boundary_policy": {
+      "decision_owner": "LLM",
+      "signals": [
+        "e.g.",
+        "see",
+        "see also",
+        "cf."
+      ],
+      "boundary_rule": "When one of these signals occurs inside the same parentheses as author-year works, include it inside the detected citation-block boundary.",
+      "output_rule": "Ignore the signal after detecting the boundary. Do not translate it, do not preserve it, and do not include it as citation metadata. Emit one bare marker for the whole block."
+    },
+    "valid_placeholder_examples": [
+      "[[CITATION:C001]]认为……",
+      "……已有类似发现[[CITATION:C002]]。"
+    ],
+    "invalid_placeholder_examples": [
+      "（[[CITATION:C001]]）",
+      "([[CITATION:C001]])",
+      "Smith（[[CITATION:C001]]）",
+      "（例如，[[CITATION:C001]]）",
+      "例如，[[CITATION:C001]]"
+    ],
+    "model_responsibility": "identify citation boundaries and return normalized metadata only",
+    "script_responsibility": "render all citation punctuation and conjunctions and replace markers",
+    "absolute_output_rule": "The following rendered formats describe the script's target only. Never emit a rendered citation in translation; emit only its [[CITATION:...]] marker.",
+    "paragraph_retry_policy": "Citation placeholder validation is performed separately for each paragraph. Any paragraph that renders an author-year citation directly, wraps a marker in brackets, duplicates a marker, or mismatches citation IDs must correct only that paragraph on retry.",
+    "narrative_examples": {
+      "one_author": "姓氏（年）",
+      "two_authors": "姓氏1和姓氏2（年）",
+      "three_or_more_authors": "第一作者姓氏等（年）",
+      "multiple_years": "姓氏（1999，2001）",
+      "multiple_author_groups": "第一篇、第二篇和第三篇"
+    },
+    "parenthetical_examples": {
+      "one_author": "（姓氏，年）",
+      "two_authors": "（姓氏1和姓氏2，年）",
+      "three_or_more_authors": "（第一作者姓氏等，年）",
+      "multiple_works_separator": "；"
+    },
+    "forbidden_in_model_translation": "Any rendered author-year citation such as Smith（1999） or （Smith，1999）"
+  },
+  "output_contract": {
+    "paragraph_id": "copy the current paragraph ID exactly",
+    "translation": "Chinese translation of the current paragraph with citation markers only",
+    "citations": [
+      {
+        "citation_id": "C001",
+        "source_text": "exact original citation text",
+        "citation_style": "narrative or parenthetical",
+        "works": [
+          {
+            "authors": [
+              "author surname"
+            ],
+            "author_form": "single, dual, or et_al",
+            "year": 1999,
+            "year_suffix": ""
+          }
+        ]
+      }
+    ],
+    "unresolved_citations": []
+  },
+  "markdown_link_example": {
+    "source": "[What's Behind Amazon's Review Problem](https://www.wsj.com/example)",
+    "translation": "[亚马逊评论问题背后的原因](https://www.wsj.com/example)",
+    "unresolved_citations": []
+  },
+  "quoted_prose_example": {
+    "source": "“The appropriate enforcement actions were taken.”",
+    "translation": "“我们已采取适当的执法措施。”",
+    "unresolved_citations": []
+  },
+  "academic_policy": {{ academic_policy | tojson }}
+}

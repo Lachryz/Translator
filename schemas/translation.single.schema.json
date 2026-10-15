@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-paragraph-id-contract": true,
+  "x-markdown-link-contract": true,
+  "x-quoted-prose-contract": true,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["paragraph_id", "translation"],
+  "properties": {
+    "paragraph_id": {
+      "type": "string",
+      "pattern": "^P[0-9]{4,}$"
+    },
+    "translation": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    }
+  }
+}

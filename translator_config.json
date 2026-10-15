@@ -1,0 +1,12 @@
+{
+  "model": "deepseek-flash",
+  "temperature": 1,
+  "max_tokens": 4096,
+  "seed": 42,
+  "concurrency": 100,
+  "validation_retries": 2,
+  "prompt_token_limit": 64000,
+  "phrase_word_limit": 8,
+  "two_batch_root": "../2batch",
+  "env_file": null
+}
